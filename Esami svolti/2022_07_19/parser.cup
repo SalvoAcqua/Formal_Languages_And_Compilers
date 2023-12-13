@@ -1,0 +1,196 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String, HashMap<String, Integer>>();
+:};
+
+parser code 	{:
+
+    public HashMap<String, HashMap<String, Integer>> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+/*action code {:
+    class MyObj {
+        public String minMaterial;
+        public String maxMaterial;
+        public Double minValue;
+        public Double maxValue;
+        public HashMap tab;
+
+        MyObj(String minMaterial, String maxMaterial, Double minValue, Double maxValue, HashMap tab){
+            this.minMaterial = minMaterial;
+            this.maxMaterial = maxMaterial;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
+            this.tab = tab;
+        }
+    };
+:};*/
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal SEP, TK1, TK2, S, START, KWH, LITERS, PLUS, MINUS, STAR, MAX, RO, RC, CM, MOD, USE, DO, DONE, KM, UNITS;
+terminal String BATTERY, FUEL ;
+//terminal Integer ;
+//terminal Float ;
+terminal Double REAL;
+
+non terminal prog, header, listTK1, run;
+//non terminal String ;
+//non terminal Integer ;
+//non terminal Float ;
+non terminal Double batteryAss, fuelAss, expr, exprList;
+//non terminal HashMap ;
+non terminal Double[] startInstr, NT1, mod, command, commandList, use, consList;
+//non terminal Integer[] ;
+
+//precedence left OR;
+//precedence left AND;
+//precedence left NOT;
+//precedence left MIN, MAJ, MIN_EQ, EQ_MIN, MAJ_EQ, EQ_MAJ, EQ;
+precedence left PLUS;
+precedence left STAR;
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= header SEP run;
+
+header ::= listTK1 | listTK1 TK2 S listTK1 TK2 S listTK1 | listTK1 TK2 S listTK1 TK2 S listTK1 TK2 S listTK1;
+
+listTK1 ::= listTK1 TK1 S | ;
+
+
+run ::= startInstr commandList;
+
+startInstr ::= START MINUS S {: RESULT = new Double[2];
+                                RESULT[0] = 100.00;
+                                RESULT[1] = 100.00;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :}
+    | START MINUS batteryAss:x S {: RESULT = new Double[2];
+                                RESULT[0] = x;
+                                RESULT[1] = 100.00;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :}
+    | START MINUS fuelAss:x S {: RESULT = new Double[2];
+                                RESULT[0] = 100.00;
+                                RESULT[1] = x;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :}
+    | START batteryAss:x MINUS S {: RESULT = new Double[2];
+                                RESULT[0] = x;
+                                RESULT[1] = 100.00;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :}
+    | START fuelAss:x MINUS S {: RESULT = new Double[2];
+                                RESULT[0] = 100.00;
+                                RESULT[1] = x;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :}
+    | START batteryAss:x MINUS fuelAss:y S {: RESULT = new Double[2];
+                                RESULT[0] = x;
+                                RESULT[1] = y;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :}
+    | START fuelAss:y MINUS batteryAss:x S {: RESULT = new Double[2];
+                                RESULT[0] = x;
+                                RESULT[1] = y;
+                                System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                            :};
+
+batteryAss ::= BATTERY expr:x KWH {: RESULT = x; :};
+
+fuelAss ::= FUEL expr:x LITERS {: RESULT = x; :};
+
+expr ::= expr:x PLUS expr:y {: RESULT = x+y;  :}
+    | expr:x STAR expr:y {: RESULT = x*y;  :}
+    | REAL:x {: RESULT = x; :}
+    | MAX RO exprList:x RC {: RESULT=x; :};
+
+exprList ::= expr:x {: RESULT = x; :} 
+    | exprList:y CM expr:x {: if(x>y){
+                                RESULT = x;
+                            } else {
+                                RESULT = y;
+                            }
+                            :};
+
+
+commandList ::= command command command command:x {: RESULT = x; :}
+    | commandList command command:x {: RESULT = x; :};
+
+command ::= mod:x S {: RESULT = x; :}
+    | use:x S {: RESULT = x; :};
+
+mod ::= MOD BATTERY expr:x {:
+                    Double[] myArr = (Double[]) parser.stack(-3);
+                    myArr[0] += x; 
+                    RESULT = myArr;
+                    System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                    :}
+    | MOD FUEL expr:x {:
+                    Double[] myArr = (Double[]) parser.stack(-3);
+                    myArr[1] += x; 
+                    RESULT = myArr;
+                    System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+    :};
+
+use ::= USE BATTERY DO consList:x DONE {: RESULT = x; :}
+    | USE FUEL DO consList:x DONE {: RESULT = x; :};
+
+consList ::= expr:x KM expr:y UNITS S {:
+                                        Double[] myArr = (Double[]) parser.stack(-8);
+                                        Double res = x*y;
+                                        if (!parser.stack(-6).equals(null) && parser.stack(-6).equals("BATTERY")) {
+                                            myArr[0]-=res;
+                                        } else {
+                                            myArr[1]-=res;
+                                        }
+                                        RESULT = myArr;
+                                        System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                                     :}
+    | consList expr:x KM expr:y UNITS S {:  
+                                        Double[] myArr = (Double[]) parser.stack(-9);
+                                        Double res = x*y;
+                                        if (!parser.stack(-7).equals(null) && parser.stack(-7).equals("BATTERY")) {
+                                            myArr[0]-=res;
+                                        } else {
+                                            myArr[1]-=res;
+                                        }
+                                        RESULT = myArr;
+                                        System.out.println("battery: " + RESULT[0] + "   fuel: " + RESULT[1]);
+                                    :};
+
+/*System.out.println(parser.stack(-5));*/

@@ -1,0 +1,169 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String, HashMap<String, Integer>>();
+:};
+
+parser code 	{:
+
+    public HashMap<String, HashMap<String, Integer>> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+/*action code {:
+    class MyObj {
+        public String minMaterial;
+        public String maxMaterial;
+        public Double minValue;
+        public Double maxValue;
+        public HashMap tab;
+
+        MyObj(String minMaterial, String maxMaterial, Double minValue, Double maxValue, HashMap tab){
+            this.minMaterial = minMaterial;
+            this.maxMaterial = maxMaterial;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
+            this.tab = tab;
+        }
+    };
+:};*/
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal SEP, TK1, TK2, TK3, S, HOUSE, START, END, CM, IF, THEN, FI, AND, OR, NOT, RO, RC, EQEQ, DOT, PRINT;
+terminal String QSTRING;
+terminal Integer UINT ;
+//terminal Float ;
+//terminal Double ;
+
+non terminal prog, header, TK3list, housesSec, lhouses, house, preferenceSec, ifList, lPrint, roomRef;
+//non terminal String ;
+non terminal Boolean boolExpr;
+//non terminal Integer ;
+//non terminal Float ;
+//non terminal Double ;
+non terminal HashMap lroom;
+//non terminal Object[] ;
+//non terminal Integer[] ;
+
+precedence left OR;
+precedence left AND;
+precedence left NOT;
+//precedence left MIN, MAJ, MIN_EQ, EQ_MIN, MAJ_EQ, EQ_MAJ, EQ;
+//precedence left PLUS, MINUS;
+//precedence left STAR, DIV;
+//precedence left uminus;               //è un terminal
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= header SEP housesSec SEP preferenceSec ;
+
+header ::= TK3list TK1 S TK3list TK2 S TK3list | TK3list TK2 S TK3list TK1 S TK3list;
+
+TK3list ::= TK3list TK3 S |  ;
+
+
+
+housesSec ::= lhouses;
+
+lhouses ::= lhouses house house | house house ;
+
+house ::= HOUSE QSTRING:x START lroom:y END {: parser.table.put(x,y); :};
+
+lroom ::= lroom:x CM QSTRING:y UINT:z {: x.put(y,z);
+                                         RESULT = x;
+                                    :}
+ | QSTRING:x UINT:y {: 
+                       HashMap inner = new HashMap<String,Integer>();
+                       inner.put(x, y);
+                       RESULT = inner;
+                    :};
+
+
+
+
+preferenceSec ::= ifList;
+
+ifList ::= ifList IF boolExpr THEN lPrint FI | ;
+
+lPrint ::= lPrint PRINT QSTRING:x S  {:
+                                      if ((Boolean)parser.stack(-5).equals(true))
+                                           System.out.println(x); 
+                                 :}
+    | PRINT QSTRING:x S {: 
+                            if ((Boolean)parser.stack(-4).equals(true))
+                              System.out.println(x); 
+                        :};
+
+boolExpr ::= boolExpr:x AND boolExpr:y {: RESULT = x&&y; :}
+    |boolExpr:x OR boolExpr:y {: RESULT = x||y; :}
+    |NOT boolExpr:x {: RESULT = !x; :}
+    |RO boolExpr:x RC {: RESULT = x; :}
+    |QSTRING:x DOT QSTRING:y EQEQ UINT:z {: 
+                                            Integer exp = new Integer(parser.table.get(x).get(y));
+                                            if ( exp.equals(z)) {
+                                                  RESULT = true;
+                                            }
+                                            else
+                                                  RESULT = false;
+                                        :};
+
+
+
+/*
+expr ::= expr:e1 PLUS expr:e2 {: RESULT = e1+e2;  :}
+    | expr:e1 MINUS expr:e2 {: RESULT = e1-e2;  :}
+    | expr:e1 STAR expr:e2 {: RESULT = e1*e2;  :}
+    | expr:e1 DIV expr:e2 {: RESULT = e1/e2;  :}
+    | MINUS expr:x {: RESULT = - x; :} %prec uminus
+    | RO expr:x RC {: RESULT = x; :}
+    | ID:x {: RESULT = parser.table.get(x); :}
+    | UINT:x {: RESULT = x; :}
+
+    |expr AND expr
+    |expr OR expr
+    |NOT expr
+
+    |expr EQEQ expr
+    |expr MIN expr
+    |expr MAJ expr
+    |expr MIN_EQ expr
+    |expr MAJ_EQ expr;
+*/
+
+
+
+
+/*System.out.println(parser.stack(-5));*/
+/* if (!parser.stack(-5).equals(null) && parser.stack(-5).equals("with")) */

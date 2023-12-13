@@ -1,0 +1,175 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String, HashMap<String, Double>>();
+:};
+
+parser code 	{:
+
+    public HashMap<String, HashMap<String, Double>> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+action code {:
+    class MyObj {
+        public Double tot;
+        public Integer nProd;
+
+        MyObj(Double tot, Integer nProd){
+            this.tot = tot;
+            this.nProd = nProd;
+        }
+    };
+:};
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal S, SEP, TK1, TK2, TK3, MINUS, CM, EURO, PERC;
+terminal String QSTRING;
+terminal Integer UINT;
+//terminal Float ;
+terminal Double REAL;
+
+non terminal prog, header, header1, header2, TK1l, TK13l,dressSec, clothesL, dress, shoppingSec, purchList;
+//non terminal String ;
+//non terminal Integer ;
+//non terminal Boolean ;
+//non terminal Float ;
+non terminal MyObj purchProdL;
+non terminal HashMap prodL;
+//non terminal Object[] ;
+//non terminal Integer[] ;
+
+//precedence left OR;
+//precedence left AND;
+//precedence left NOT;
+//precedence left MIN, MAJ, MIN_EQ, EQ_MIN, MAJ_EQ, EQ_MAJ, EQ;
+//precedence left PLUS, MINUS;
+//precedence left STAR, DIV;
+//precedence left uminus;               //è un terminal
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= header SEP dressSec SEP shoppingSec;
+
+header ::= header1 | header2;
+
+header1 ::= TK1l TK2 S TK2 S TK2 S | TK1l TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S | TK1l TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S TK2 S;
+
+TK1l ::= TK1l TK1 S TK1 S | TK1 S TK1 S TK1 S ;
+
+header2 ::= TK2 S TK13l | TK2 S TK13l TK2 S TK13l;
+
+TK13l ::= TK13l TK1 S | TK13l TK3 S | ;
+
+
+
+
+dressSec ::= clothesL;
+
+clothesL ::= clothesL dress dress | dress dress dress;
+
+dress ::= QSTRING:x MINUS prodL:inner S {: parser.table.put(x, inner); :};
+
+prodL ::= prodL:inner CM UINT QSTRING:x REAL:y EURO {: 
+                                            inner.put(x,y);
+                                            RESULT = inner;
+                                        :}
+    | UINT QSTRING:x REAL:y EURO {: 
+                                HashMap inner = new HashMap<String,Double>();
+                                inner.put(x,y);
+                                RESULT = inner;
+                            :};
+
+
+
+
+shoppingSec ::= purchList;
+
+purchList ::= purchList QSTRING:x {: System.out.println(x); :} UINT PERC MINUS purchProdL:obj S {:System.out.println("TOTAL: " + obj.tot + " euro N_PROD: " + obj.nProd); :}
+    | QSTRING:x {: System.out.println(x); :} UINT PERC MINUS purchProdL:obj S {:System.out.println("TOTAL: " + obj.tot + " euro N_PROD: " + obj.nProd); :};
+
+purchProdL ::= purchProdL:obj CM QSTRING:x UINT:y {:
+                                                Double res = y*parser.table.get((String)parser.stack(-8)).get(x)*(Integer)parser.stack(-6)/100;
+                                                System.out.println(x + " " + res + " euro");
+                                                obj.tot += res;
+                                                obj.nProd += y;
+                                                RESULT = obj;
+                                             :}
+    | QSTRING:x UINT:y {: 
+                        Double res = y*parser.table.get((String)parser.stack(-6)).get(x)*(Integer)parser.stack(-4)/100;
+                        System.out.println(x + " " + res + " euro");
+                        RESULT = new MyObj(res, y);
+                    :};
+
+
+
+
+
+/*
+expr ::= expr:e1 PLUS expr:e2 {: RESULT = e1+e2;  :}
+    | expr:e1 MINUS expr:e2 {: RESULT = e1-e2;  :}
+    | expr:e1 STAR expr:e2 {: RESULT = e1*e2;  :}
+    | expr:e1 DIV expr:e2 {: RESULT = e1/e2;  :}
+    | MINUS expr:x {: RESULT = - x; :} %prec uminus
+    | RO expr:x RC {: RESULT = x; :}
+    | ID:x {: RESULT = parser.table.get(x); :}
+    | UINT:x {: RESULT = x; :}
+
+    |expr AND expr
+    |expr OR expr
+    |NOT expr
+
+    |expr EQEQ expr
+    |expr MIN expr
+    |expr MAJ expr
+    |expr MIN_EQ expr
+    |expr MAJ_EQ expr;
+*/
+
+/*
+boolExpr ::= boolExpr:x AND boolExpr:y {: RESULT = x&&y; :}
+    |boolExpr:x OR boolExpr:y {: RESULT = x||y; :}
+    |NOT boolExpr:x {: RESULT = !x; :}
+    |RO boolExpr:x RC {: RESULT = x; :};
+*/
+
+
+
+
+/* System.out.println(parser.stack(-5)); */
+/* if (!parser.stack(-5).equals(null) && parser.stack(-5).equals("with")); */
+/* HashMap table = new HashMap<String,Integer>(); */
+/* Integer.MAX_VALUE */
+/* Double.MAX_VALUE */

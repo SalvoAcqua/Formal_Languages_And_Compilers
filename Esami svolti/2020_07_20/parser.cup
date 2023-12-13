@@ -1,0 +1,139 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String, Integer>();
+:};
+
+parser code 	{:
+
+    public HashMap<String, Integer> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal SEP, TK1, TK2, S, EQ, PLUS, MINUS, STAR, DIV, RO, RC, BO, BC, uminus;
+terminal String ID, COMPARE, WITH, END, PRINT;
+terminal Integer UINT;
+//terminal Float ;
+//terminal Double ;
+
+non terminal prog, header, header1, header2, tk1l, tk2l, tk1list, commands, command, assignment;
+//non terminal String ;
+non terminal Integer expr, printCmd;
+//non terminal Float ;
+//non terminal Double ;
+non terminal List printList, comp, compList, compare;
+//non terminal Object[] ;
+//non terminal Integer[] ;
+
+precedence left PLUS, MINUS;
+precedence left STAR, DIV;
+precedence left uminus;
+
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= header SEP commands {: System.out.println("Prog recognized"); :};
+header ::= header1 | header2;
+
+header1 ::= tk1l tk2l | tk1l tk2l tk2l tk2l tk2l tk2l tk2l tk2l;
+tk1l ::= tk1l TK1 S TK1 S | TK1 S TK1 S TK1 S TK1 S TK1 S;
+tk2l ::= TK2 S TK2 S TK2 S;
+
+header2 ::= TK2 S tk1list TK2 S tk1list TK2 S tk1list;
+tk1list ::= | tk1list TK1 S;
+
+
+
+//commands ::= | commands assignment | commands compare;
+commands ::= | commands command;
+command ::= assignment | compare;
+
+assignment ::= ID:x EQ expr:res S {: parser.table.put(x, res);
+                                :};
+expr ::= expr:e1 PLUS expr:e2 {: RESULT = e1+e2;  :}
+    | expr:e1 MINUS expr:e2 {: RESULT = e1-e2;  :}
+    | expr:e1 STAR expr:e2 {: RESULT = e1*e2;  :}
+    | expr:e1 DIV expr:e2 {: RESULT = e1/e2;  :}
+    | MINUS expr:x {: RESULT = - x; :} %prec uminus
+    | RO expr:x RC {: RESULT = x; :}
+    | ID:x {: RESULT = parser.table.get(x); :}
+    | UINT:x {: RESULT = x; :};
+//questa grammatica sotto non accetta -5 per esempio
+//expr ::= expr PLUS term | expr MINUS term | term
+//term ::= term STAR factor | term DIV factor | factor
+//factor ::= RO expr RC | ID | UINT;
+
+compare ::= COMPARE expr WITH compList:y END S {: /* Stampa lista */ 
+                                                    System.out.println(y);
+                                                :};
+compList ::= compList:y comp:x {: /* Unifica lista */
+                                if (x!=null && y!=null) {
+                                    //System.out.println(x);
+                                    //System.out.println(y);
+                                    List merge = y;
+                                    merge.addAll(x);
+                                    RESULT = merge;
+                                } else if (x!=null && y==null) {
+                                    //System.out.println(x);
+                                    RESULT = x;
+                                } else if (x==null && y!=null) {
+                                    //System.out.println(y);
+                                    RESULT = y;
+                                }
+                            :}
+    | comp:x {:/* Ricopia lista */
+                RESULT = x;
+            :};
+comp ::= expr:x BO printList:y BC {: if (!parser.stack(-5).equals(null) && parser.stack(-5).equals("with")) {
+                                        //Not first comp
+                                        if (parser.stack(-6).equals(x))
+                                            RESULT = y;
+                                    } else {
+                                        //First comp
+                                        if(parser.stack(-5).equals(x))
+                                            RESULT = y;
+                                    }
+                                    /*System.out.println(parser.stack(-5));*/ 
+                                :};
+printList ::= printList:myList printCmd:x {: 
+                                            myList.add(x);
+                                            RESULT=myList;
+                                        :}
+    | printCmd:x {: List myList = new ArrayList();
+                myList.add(x);
+                RESULT = myList;
+             :};
+printCmd ::= PRINT expr:x S {: RESULT=x; :};

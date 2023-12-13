@@ -1,0 +1,194 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String, HashMap<String, Double>>();
+:};
+
+parser code 	{:
+
+    public HashMap<String, HashMap<String, Double>> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+action code {:
+    class MyObj {
+        public String minFood;
+        public String maxFood;
+        public Double minValue;
+        public Double maxValue;
+        public HashMap tab;
+
+        MyObj(String minFood, String maxFood, Double minValue, Double maxValue, HashMap tab){
+            this.minFood = minFood;
+            this.maxFood = maxFood;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
+            this.tab = tab;
+        }
+    };
+:};
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal SEP, TK1, TK2, S, COL, SO, SC, CM, EUROKG, DOT, KG;
+terminal String QSTRING;
+terminal Integer UINT;
+//terminal Float ;
+terminal Double REAL;
+
+non terminal prog, header, TK2list, food, recipeSec, recipeL, recipe;
+//non terminal String ;
+non terminal Integer NT1;
+//non terminal Float ;
+non terminal Double ingredientL;
+non terminal MyObj foodL, category, categoryL ;
+//non terminal Object[] ;
+//non terminal Integer[] ;
+
+//precedence left OR;
+//precedence left AND;
+//precedence left NOT;
+//precedence left MIN, MAJ, MIN_EQ, EQ_MIN, MAJ_EQ, EQ_MAJ, EQ;
+//precedence left PLUS, MINUS;
+//precedence left STAR, DIV;
+//precedence left uminus;               //è un terminal
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= header SEP food SEP recipeSec;
+
+header ::= TK2list TK1 S | TK1 S TK2list | TK2 S TK1 S TK2 S | TK2list TK1 S TK2list | TK2 S TK1 S TK2list | TK2list TK1 S TK2 S ;
+
+TK2list ::= TK2list TK2 S | TK2 S TK2 S ;
+
+
+food ::= categoryL:obj {:
+                        System.out.println("Less expensive: " + obj.minFood + " " + obj.minValue + " EURO/Kg");
+                        System.out.println("More expensive: " + obj.maxFood + " " + obj.maxValue + " EURO/Kg");
+                    :};
+
+categoryL ::= categoryL:obj3 category:obj1 category:obj2 {: if (obj1.minValue<obj2.minValue){
+                                                                if (obj1.minValue<obj3.minValue) {
+                                                                    RESULT=obj1;
+                                                                }
+                                                            } else {
+                                                                if (obj2.minValue<obj3.minValue) {
+                                                                    RESULT=obj2;
+                                                                }
+                                                            }
+
+                                                            if (obj1.maxValue>obj2.maxValue){
+                                                                if (obj1.maxValue>obj3.maxValue) {
+                                                                    RESULT=obj1;
+                                                                }
+                                                            } else {
+                                                                if (obj2.maxValue>obj3.maxValue) {
+                                                                    RESULT=obj2;
+                                                                }
+                                                            }
+                                                    :}
+        | {: RESULT= new MyObj("","",1000.00, 0.00, null); :} ;
+
+category ::= QSTRING:x COL SO foodL:obj SC S {: 
+                                            parser.table.put(x,obj.tab);
+                                            RESULT = obj;
+                                        :};
+
+foodL ::= foodL:obj CM QSTRING:x COL REAL:y EUROKG {: 
+                                                obj.tab.put(x,y);
+                                                if (y<obj.minValue) {
+                                                    obj.minFood = x;
+                                                    obj.minValue = y;
+                                                }
+                                                if (y>obj.maxValue) {
+                                                    obj.maxFood = x;
+                                                    obj.maxValue = y;
+                                                }
+                                                RESULT = obj;
+                                            :}
+    | QSTRING:x COL REAL:y EUROKG {: 
+                                HashMap inner = new HashMap<String, Double>();
+                                inner.put(x,y);
+                                MyObj myobj = new MyObj(x,x,y,y,inner);
+                                RESULT = myobj;
+                             :};
+
+
+recipeSec ::= recipeL;
+
+recipeL ::= recipeL recipe
+    | {: System.out.println("----"); :} ;
+
+recipe ::= UINT QSTRING:x NT1 {: System.out.println((String)parser.stack(-1)); :} COL ingredientL:res S {: System.out.println("TOT: " + res + " EURO"); :}
+    | UINT QSTRING:x {: System.out.println((String)parser.stack(0)); :} ingredientL:res S {: System.out.println("TOT: " + res + " EURO"); :};
+
+ingredientL ::= ingredientL:w CM QSTRING:x DOT QSTRING:y REAL:z KG {: 
+                                                                    Double res = (Integer)parser.stack(-9)*z*parser.table.get(x).get(y);
+                                                                    System.out.println(y + " " + res + " EURO");
+                                                                    RESULT = w + res ;
+                                                                :}
+    | QSTRING:x DOT QSTRING:y REAL:z KG {:
+                                            Double res = (Integer)parser.stack(-7)*z*parser.table.get(x).get(y);
+                                            System.out.println(y + " " + res + " EURO");
+                                            RESULT = res;
+                                        :} ;
+
+NT1 ::= {: RESULT = (Integer)parser.stack(-1); :};
+
+/*
+expr ::= expr:e1 PLUS expr:e2 {: RESULT = e1+e2;  :}
+    | expr:e1 MINUS expr:e2 {: RESULT = e1-e2;  :}
+    | expr:e1 STAR expr:e2 {: RESULT = e1*e2;  :}
+    | expr:e1 DIV expr:e2 {: RESULT = e1/e2;  :}
+    | MINUS expr:x {: RESULT = - x; :} %prec uminus
+    | RO expr:x RC {: RESULT = x; :}
+    | ID:x {: RESULT = parser.table.get(x); :}
+    | UINT:x {: RESULT = x; :}
+
+    |expr AND expr
+    |expr OR expr
+    |NOT expr
+
+    |expr EQEQ expr
+    |expr MIN expr
+    |expr MAJ expr
+    |expr MIN_EQ expr
+    |expr MAJ_EQ expr;
+*/
+
+
+
+
+/*System.out.println(parser.stack(-5));*/
+/* if (!parser.stack(-5).equals(null) && parser.stack(-5).equals("with")) */

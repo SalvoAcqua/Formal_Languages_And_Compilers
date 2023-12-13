@@ -1,0 +1,165 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String,Integer>();
+:};
+
+parser code 	{:
+
+    public HashMap<String,Integer> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+/*action code {:
+    class MyObj {
+        public String minMaterial;
+        public String maxMaterial;
+        public Double minValue;
+        public Double maxValue;
+        public HashMap tab;
+
+        MyObj(String minMaterial, String maxMaterial, Double minValue, Double maxValue, HashMap tab){
+            this.minMaterial = minMaterial;
+            this.maxMaterial = maxMaterial;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
+            this.tab = tab;
+        }
+    };
+:};*/
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal SEP, TK1, TK2, COMPARE, WITH, END, PRINT, S, EQ, uminus, BO, BC, RO, RC, PLUS, MINUS, STAR, DIV;
+terminal String ID;
+terminal Integer UINT;
+//terminal Float ;
+//terminal Double ;
+
+non terminal prog, header, TK1list, TK2list, TK1l, header1, header2, commandSec, lcommand, command, assignCmd, compareCmd, compList, printList;
+//non terminal String ;
+non terminal Integer expr, NT1, NT2;
+//non terminal Float ;
+//non terminal Double ;
+//non terminal HashMap ;
+//non terminal Object[] ;
+//non terminal Integer[] ;
+
+//precedence left OR;
+//precedence left AND;
+//precedence left NOT;
+//precedence left MIN, MAJ, MIN_EQ, EQ_MIN, MAJ_EQ, EQ_MAJ, EQ;
+precedence left PLUS, MINUS;
+precedence left STAR, DIV;
+precedence left uminus;               //è un terminal
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= header SEP commandSec;
+
+header ::= header1 | header2;
+
+header1 ::= TK1list TK2list TK2list TK2list TK2list TK2list TK2list TK2list | TK1list TK2list ;
+
+TK1list ::= TK1list TK1 S TK1 S | TK1 S TK1 S TK1 S TK1 S TK1 S ;
+
+TK2list ::= TK2 S TK2 S TK2 S;
+
+
+header2 ::= TK2 S TK1l TK2 S TK1l TK2 S TK1l;
+
+TK1l ::= TK1l TK1 S | ;
+
+
+
+commandSec ::= lcommand;
+
+lcommand ::= lcommand command | ;
+
+command ::= assignCmd | compareCmd; 
+
+assignCmd ::= ID:y EQ expr:x S {: 
+                                parser.table.put(y, x);
+                            :};
+
+compareCmd ::= COMPARE expr WITH NT2 NT1 compList END S;
+
+compList ::= compList expr BO printList BC | expr BO printList BC;
+
+printList ::= printList PRINT expr:e S {:
+                                        Integer x = (Integer)parser.stack(-7);
+                                        Integer y = (Integer)parser.stack(-5);
+                                        if (x.equals(y)) {
+                                            System.out.println(e);
+                                        }
+                                    :}
+    | PRINT expr:e S {: 
+                    Integer x = (Integer)parser.stack(-6);
+                    Integer y = (Integer)parser.stack(-4);
+                    if (x.equals(y)) {
+                        System.out.println(e);
+                    }
+                :};
+
+
+
+expr ::= expr:e1 PLUS expr:e2 {: RESULT = e1+e2;  :}
+    | expr:e1 MINUS expr:e2 {: RESULT = e1-e2;  :}
+    | expr:e1 STAR expr:e2 {: RESULT = e1*e2;  :}
+    | expr:e1 DIV expr:e2 {: RESULT = e1/e2;  :}
+    | MINUS expr:x {: RESULT = -x; :} %prec uminus
+    | RO expr:x RC {: RESULT = x; :}
+    | ID:x {: RESULT = parser.table.get(x); :}
+    | UINT:x {: RESULT = x; :};
+
+NT1 ::= {: RESULT = (Integer)parser.stack(-2); :};
+NT2 ::= {: RESULT = (Integer)parser.stack(-1); :};
+
+/*
+    |expr AND expr
+    |expr OR expr
+    |NOT expr
+
+    |expr EQEQ expr
+    |expr MIN expr
+    |expr MAJ expr
+    |expr MIN_EQ expr
+    |expr MAJ_EQ expr;
+*/
+
+
+
+
+/*System.out.println(parser.stack(-5));*/
+/* if (!parser.stack(-5).equals(null) && parser.stack(-5).equals("with")) */

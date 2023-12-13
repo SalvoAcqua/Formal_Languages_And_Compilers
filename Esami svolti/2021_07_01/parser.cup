@@ -1,0 +1,192 @@
+/*************************
+ Parser
+**************************/
+
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+init with {:
+    table = new HashMap<String, HashMap<String, Double>>();
+:};
+
+parser code 	{:
+
+    public HashMap<String, HashMap<String, Double>> table;
+    
+    public void report_error(String message, Object info) {
+        StringBuffer m = new StringBuffer(message);
+        if (info instanceof Symbol) {
+            if (((Symbol)info).left != 1 && ((Symbol)info).right != 1) {
+                if (((Symbol)info).left != -1 && ((Symbol)info).right != -1) {
+                    int line = (((Symbol)info).left) + 1;
+                    int column = (((Symbol)info).right) + 1;
+                    m.append(" (line " + line + " column " + column + ")");
+                }
+            }
+            System.err.println(m);
+        }
+    }
+    
+    public Object stack(int position) {
+        return (((Symbol)stack.elementAt(tos + position)).value);
+    }
+:};
+
+action code {:
+    class MyObj {
+        private String minMaterial;
+        private String maxMaterial;
+        private Double minValue;
+        private Double maxValue;
+        private HashMap tab;
+
+        MyObj(String minMaterial, String maxMaterial, Double minValue, Double maxValue, HashMap tab){
+            this.minMaterial = minMaterial;
+            this.maxMaterial = maxMaterial;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
+            this.tab = tab;
+        }
+
+        String getMinMaterial() { return this.minMaterial; }
+        String getMaxMaterial(){ return this.maxMaterial; }
+        Double getMinValue() { return this.minValue; }
+        Double getMaxValue(){ return this.maxValue; }
+        HashMap getTab() { return this.tab; }
+
+        void setMinMaterial(String minMaterial) {this.minMaterial = minMaterial; }
+        void setMaxMaterial(String maxMaterial) {this.maxMaterial = maxMaterial; }
+        void setMinValue(Double minValue) {this.minValue = minValue; }
+        void setMaxValue(Double maxValue) {this.maxValue = maxValue; }
+
+    };
+:};
+
+
+
+//////////////////////////////////
+///// SYMBOLS DECLARATION
+/////////////////////////////////
+
+terminal SEP, S, CM, BO, BC, TK1, TK2, EUROKG, EURO, COL, KG;
+terminal String NAME ;
+terminal Integer UINT;
+//terminal Float ;
+terminal Double REAL;
+
+non terminal prog, headerSec, warehouseSec, productsSec, header1, header2, lTK1, lTK2, TK2x3, TK1list;
+non terminal matTypeList, matType, mat ;
+non terminal productsList, elementList, componentList;
+non terminal Double NT1, NT2;
+//non terminal Integer ;
+//non terminal Float ;
+//non terminal String ;
+non terminal MyObj matList;
+//non terminal Object[] ;
+//non terminal Integer[] ;
+
+//precedence left OR;
+//precedence left AND;
+//precedence left NOT;
+//precedence left MIN, MAJ, MIN_EQ, EQ_MIN, MAJ_EQ, EQ_MAJ, EQ;
+//precedence left PLUS, MINUS;
+//precedence left STAR, DIV;
+//precedence left uminus;
+
+//////////////////////////////////
+///// GRAMMAR
+/////////////////////////////////
+
+start with prog;
+
+prog ::= headerSec SEP warehouseSec SEP productsSec {: System.out.println("prog recognized"); :};
+
+headerSec ::= header1 | header2;
+
+header1 ::= lTK1 lTK2;
+
+lTK1 ::= lTK1 TK1 S TK1 S | TK1 S TK1 S TK1 S TK1 S;
+
+lTK2 ::= TK2x3 | TK2x3 TK2x3 TK2x3 | TK2x3 TK2x3 TK2x3 TK2x3;
+
+TK2x3 ::= TK2 S TK2 S TK2 S;
+
+header2 ::= TK2 S TK1list TK2 S TK1list | TK2 S TK1list TK2 S TK1list TK2 S TK1list;
+
+TK1list ::= TK1list TK1 S | ;
+
+
+
+
+warehouseSec ::= matTypeList ;
+
+matTypeList ::= matTypeList matType matType | matType matType ;
+
+matType ::= BO matList:o BC NAME:x S {: parser.table.put(x,o.getTab());
+                                        System.out.println(x + ": less: " + o.getMinMaterial() + ", more: " + o.getMaxMaterial());
+                                    :};
+
+matList ::= matList:o CM NAME:x REAL:y EUROKG {: o.getTab().put(x,y);
+                                                if (y<o.getMinValue()) {
+                                                    o.setMinValue(y);
+                                                    o.setMinMaterial(x);
+                                                }
+                                                if (y>o.getMaxValue()) {
+                                                    o.setMaxValue(y);
+                                                    o.setMaxMaterial(x);
+                                                }
+                                                RESULT = o;
+
+:}
+    | NAME:x REAL:y EUROKG {: HashMap<String, Double> tab = new HashMap<String, Double>(); 
+            tab.put(x,y);
+            RESULT = new MyObj(x, x, y, y, tab);
+    :};
+
+
+
+productsSec ::= productsList;
+
+productsList ::= productsList REAL EURO NT1 NAME:x {:System.out.println(x);:} COL elementList S
+    | {: System.out.println("----------");
+    :};
+
+elementList ::= elementList CM NAME BO componentList BC | NAME BO componentList BC;
+
+componentList ::= componentList CM NAME:y UINT:x KG {:
+                                                        Double res = (x*parser.table.get(parser.stack(-6)).get(y))+(Double)parser.stack(-12);
+                                                        System.out.println(y + " " + res + " euro");
+                                                    :}
+    | NAME:y UINT:x KG {:   
+                            Double res = (x*parser.table.get(parser.stack(-4)).get(y))+(Double)parser.stack(-10);
+                            System.out.println(y + " " + res + " euro");
+                        :};
+
+NT1 ::= {:RESULT = (Double) parser.stack(-1); :};
+//NT2 ::= {:RESULT = (Double) parser.stack(-2); :};
+
+
+/*
+expr ::= expr:e1 PLUS expr:e2 {: RESULT = e1+e2;  :}
+    | expr:e1 MINUS expr:e2 {: RESULT = e1-e2;  :}
+    | expr:e1 STAR expr:e2 {: RESULT = e1*e2;  :}
+    | expr:e1 DIV expr:e2 {: RESULT = e1/e2;  :}
+    | MINUS expr:x {: RESULT = - x; :} %prec uminus
+    | RO expr:x RC {: RESULT = x; :}
+    | ID:x {: RESULT = parser.table.get(x); :}
+    | UINT:x {: RESULT = x; :}
+
+    |expr AND expr
+    |expr OR expr
+    |NOT expr
+
+    |expr EQEQ expr
+    |expr MIN expr
+    |expr MAJ expr
+    |expr MIN_EQ expr
+    |expr MAJ_EQ expr;
+*/
+
+
+/*System.out.println(parser.stack(-5));*/
